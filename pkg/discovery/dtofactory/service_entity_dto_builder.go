@@ -10,6 +10,7 @@ import (
 
 	"fmt"
 	"github.com/golang/glog"
+	"strings"
 )
 
 const (
@@ -46,6 +47,20 @@ func (builder *ServiceEntityDTOBuilder) BuildSvcEntityDTO(servicePodMap map[*api
 			ServiceType: &service.Name,
 		}
 		ebuilder.VirtualApplicationData(vAppData)
+
+		ns := "DEFAULT"
+		ipAttr := "IP"
+		ips := []string{}
+		for _, pod := range pods {
+			ips = append(ips, "vapp-" + pod.Status.PodIP)
+		}
+		ip := strings.Join(ips, ",")
+		ipProperty := &proto.EntityDTO_EntityProperty{
+			Namespace: &ns,
+			Name:      &ipAttr,
+			Value:     &ip,
+		}
+		ebuilder.WithProperty(ipProperty)
 
 		//3. check whether it is monitored
 		if !util.IsMonitoredFromAnnotation(service.GetAnnotations()) {

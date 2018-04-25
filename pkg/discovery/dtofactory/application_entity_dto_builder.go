@@ -81,7 +81,11 @@ func (builder *applicationEntityDTOBuilder) BuildEntityDTOs(pods []*api.Pod) ([]
 				DisplayName(displayName)
 
 			//2. sold commodities: transaction
-			commoditiesSold, err := builder.getCommoditiesSold(appId, i, pod)
+			soldCommKey := pod.Status.PodIP
+			if i > 0 {
+				soldCommKey = fmt.Sprintf("%s-%d", pod.Status.PodIP, i)
+			}
+			commoditiesSold, err := builder.getCommoditiesSold(soldCommKey, i, pod)
 			if err != nil {
 				glog.Errorf("Failed to create Application(%s) entityDTO: %v", displayName, err)
 				continue
@@ -108,6 +112,7 @@ func (builder *applicationEntityDTOBuilder) BuildEntityDTOs(pods []*api.Pod) ([]
 			appType := util.GetAppType(pod)
 			ebuilder.ApplicationData(&proto.EntityDTO_ApplicationData{
 				Type: &appType,
+				IpAddress: &(pod.Status.PodIP),
 			})
 
 			//5. build the entityDTO
@@ -216,7 +221,22 @@ func (builder *applicationEntityDTOBuilder) getApplicationProperties(pod *api.Po
 	var properties []*proto.EntityDTO_EntityProperty
 	// additional node cluster info property.
 	appProperties := property.AddHostingPodProperties(pod.Namespace, pod.Name, index)
+
+
+	ns := "DEFAULT"
+	ipAttr := "IP"
+	value := pod.Status.PodIP
+	if index > 0 {
+		value = fmt.Sprintf("%s-%d", pod.Status.PodIP, index)
+	}
+	ipProperty := &proto.EntityDTO_EntityProperty{
+		Namespace: &ns,
+		Name:      &ipAttr,
+		Value:     &value,
+	}
+
 	properties = append(properties, appProperties...)
+	properties = append(properties, ipProperty)
 
 	return properties
 }
