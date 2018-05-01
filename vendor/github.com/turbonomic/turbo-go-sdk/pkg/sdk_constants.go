@@ -4,7 +4,7 @@ type DiscoveryType string
 
 const (
 	DEFAULT_FULL_DISCOVERY_IN_SECS int32 = 600
-	DEFAULT_MIN_DISCOVERY_IN_SECS  int32 = 60
+	DEFAULT_MIN_DISCOVERY_IN_SECS  int32 = 10
 	DISCOVERY_NOT_SUPPORTED        int32 = -1
 
 	FULL_DISCOVERY        DiscoveryType = "Full"
