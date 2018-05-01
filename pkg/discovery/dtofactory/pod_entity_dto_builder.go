@@ -314,9 +314,15 @@ func (builder *podEntityDTOBuilder) getPodProperties(pod *api.Pod) ([]*proto.Ent
 func (builder *podEntityDTOBuilder) createContainerPodData(pod *api.Pod) *proto.EntityDTO_ContainerPodData {
 	// Add IP address in ContainerPodData. Some pods (system pods and daemonset pods) may use the host IP as the pod IP,
 	// in which case the IP address will not be unique (in the k8s cluster) and hence not populated in ContainerPodData.
+	fullName := pod.Name
+	ns := pod.Namespace
+	port := "na"
 	if pod.Status.PodIP != "" && pod.Status.PodIP != pod.Status.HostIP {
 		return &proto.EntityDTO_ContainerPodData{
 			IpAddress: &(pod.Status.PodIP),
+			FullName: &fullName,
+			Namespace: &ns,
+			Port: &port,
 		}
 	}
 

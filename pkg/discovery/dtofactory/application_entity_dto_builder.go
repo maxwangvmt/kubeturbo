@@ -17,6 +17,7 @@ import (
 
 const (
 	defaultTransactionCapacity float64 = 500.0
+	defaultRespTimeCapacity float64 = 100.0
 )
 
 var (
@@ -128,47 +129,6 @@ func (builder *applicationEntityDTOBuilder) BuildEntityDTOs(pods []*api.Pod) ([]
 	return result, nil
 }
 
-func (builder *applicationEntityDTOBuilder) getTransactionUsedValue(pod *api.Pod) float64 {
-	key := util.PodMetricIdAPI(pod)
-	etype := metrics.PodType
-	rtype := metrics.Transaction
-	mtype := metrics.Used
-	metricsId := metrics.GenerateEntityResourceMetricUID(etype, key, rtype, mtype)
-
-	usedMetric, err := builder.metricsSink.GetMetric(metricsId)
-	if err != nil {
-		glog.V(3).Infof("failed to get Pod[%s] transaction usage: %v", key, err)
-		return 0.0
-	}
-
-	return usedMetric.GetValue().(float64)
-}
-
-// equally distribute Pod.Transaction.used to the hosted containers.
-func (builder *applicationEntityDTOBuilder) getAppTransactionUsage(index int, pod *api.Pod) float64 {
-	podTransactionUsage := builder.getTransactionUsedValue(pod)
-	containerNum := len(pod.Spec.Containers)
-
-	// case1: if there is only one container, then it has all the transactions.
-	if containerNum < 2 {
-		return podTransactionUsage
-	}
-
-	// case2: equally distribute transactions, the first container may have a little more
-	if containerNum < index {
-		glog.Errorf("potential bug: pod[%s] containerNum mismatch %d Vs. %d.", util.PodKeyFunc(pod), containerNum, index)
-		return 0.0
-	}
-
-	share := float64(int64(podTransactionUsage) / int64(containerNum))
-	if index == 0 {
-		residue := (podTransactionUsage - (share * float64(containerNum)))
-		share += residue
-	}
-
-	return share
-}
-
 // applicationEntity only sells transaction
 func (builder *applicationEntityDTOBuilder) getCommoditiesSold(appId string, index int, pod *api.Pod) ([]*proto.CommodityDTO, error) {
 	var result []*proto.CommodityDTO
@@ -178,10 +138,20 @@ func (builder *applicationEntityDTOBuilder) getCommoditiesSold(appId string, ind
 
 	tranCommodity, err := ebuilder.Create()
 	if err != nil {
-		glog.Errorf("Failed to get application(%s) commodities sold:%v", appId, err)
+		glog.Errorf("Failed to get application(%s) transaction commodity sold:%v", appId, err)
 		return nil, err
 	}
 	result = append(result, tranCommodity)
+
+	ebuilder = sdkbuilder.NewCommodityDTOBuilder(proto.CommodityDTO_RESPONSE_TIME).Key(appId).
+		Capacity(defaultRespTimeCapacity)
+
+	respCommodity, err := ebuilder.Create()
+	if err != nil {
+		glog.Errorf("Failed to get application(%s) response time commodity sold:%v", appId, err)
+		return nil, err
+	}
+	result = append(result, respCommodity)
 
 	return result, nil
 }
