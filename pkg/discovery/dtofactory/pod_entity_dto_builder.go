@@ -127,6 +127,8 @@ func (builder *podEntityDTOBuilder) BuildEntityDTOs(pods []*api.Pod) ([]*proto.E
 
 		entityDTOBuilder = entityDTOBuilder.ContainerPodData(builder.createContainerPodData(pod))
 
+		entityDTOBuilder.WithPowerState(proto.EntityDTO_POWERED_ON)
+
 		// build entityDTO.
 		entityDto, err := entityDTOBuilder.Create()
 		if err != nil {

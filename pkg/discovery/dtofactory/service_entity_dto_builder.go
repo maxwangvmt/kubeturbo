@@ -69,6 +69,8 @@ func (builder *ServiceEntityDTOBuilder) BuildSvcEntityDTO(servicePodMap map[*api
 			ebuilder.Monitored(false)
 		}
 
+		ebuilder.WithPowerState(proto.EntityDTO_POWERED_ON)
+
 		//4. create it
 		entityDto, err := ebuilder.Create()
 		if err != nil {

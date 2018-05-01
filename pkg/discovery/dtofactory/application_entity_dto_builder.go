@@ -116,6 +116,8 @@ func (builder *applicationEntityDTOBuilder) BuildEntityDTOs(pods []*api.Pod) ([]
 				IpAddress: &(pod.Status.PodIP),
 			})
 
+			ebuilder.WithPowerState(proto.EntityDTO_POWERED_ON)
+
 			//5. build the entityDTO
 			entityDTO, err := ebuilder.Create()
 			if err != nil {
