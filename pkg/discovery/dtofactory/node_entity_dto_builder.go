@@ -53,6 +53,10 @@ func NewNodeEntityDTOBuilder(sink *metrics.EntityMetricSink, stitchingManager *s
 // Build entityDTOs based on the given node list.
 func (builder *nodeEntityDTOBuilder) BuildEntityDTOs(nodes []*api.Node) ([]*proto.EntityDTO, error) {
 	var result []*proto.EntityDTO
+
+	// Preprocess for node taints to create access commodities for each node later.
+	//taintCollection := getTaintCollection(nodes)
+
 	for _, node := range nodes {
 		// id.
 		nodeID := string(node.UID)
@@ -184,6 +188,13 @@ func (builder *nodeEntityDTOBuilder) getNodeCommoditiesSold(node *api.Node) ([]*
 		commoditiesSold = append(commoditiesSold, schedAccessComm)
 	}
 
+	//// Access commodity: taints.
+	//taintAccessComms, err := createTaintAccessComms(node, taintCollection)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//commoditiesSold = append(commoditiesSold, taintAccessComms...)
+
 	// Cluster commodity.
 	clusterMetricUID := metrics.GenerateEntityStateMetricUID(metrics.ClusterType, "", metrics.Cluster)
 	clusterInfo, err := builder.metricsSink.GetMetric(clusterMetricUID)
@@ -268,4 +279,56 @@ func getNodeIPs(node *api.Node) []string {
 		result = append(result, addrs[i].Address)
 	}
 	return result
+}
+
+func getTaintCollection(nodes []*api.Node) map[api.Taint]string {
+	taintCollection := make(map[api.Taint]string)
+
+	for _, node := range nodes {
+		taints := node.Spec.Taints
+
+		for _, taint := range taints {
+			if taint.Effect == api.TaintEffectNoExecute || taint.Effect == api.TaintEffectNoSchedule {
+				taintCollection[taint] = taint.Key + "=" + taint.Value + ":" + string(taint.Effect)
+				glog.V(4).Infof("Found taint (comm key = %s): %+v)", taintCollection[taint], taint)
+			}
+		}
+	}
+
+	glog.V(2).Infof("Created taint collection with %d taints found", len(taintCollection))
+
+	return taintCollection
+}
+
+func createTaintAccessComms(node *api.Node, taintCollection map[api.Taint]string) ([]*proto.CommodityDTO, error) {
+	accessComms := []*proto.CommodityDTO{}
+
+	taints := node.Spec.Taints
+	nodeTaints := make(map[api.Taint]struct{})
+
+	for _, taint := range taints {
+		nodeTaints[taint] = struct{}{}
+	}
+
+	for taint, key := range taintCollection {
+		// If the node doesn't contain the taint, create access commodity
+		if _, ok := nodeTaints[taint]; !ok {
+			accessComm, err := sdkbuilder.NewCommodityDTOBuilder(proto.CommodityDTO_VMPM_ACCESS).
+				Key(key).
+				Capacity(accessCommodityDefaultCapacity).
+				Create()
+
+			if err != nil {
+				return nil, err
+			}
+
+			glog.V(4).Infof("Created access commodity with key %s for node %s", key, node.GetName())
+
+			accessComms = append(accessComms, accessComm)
+		}
+	}
+
+	glog.V(4).Infof("Created %d access commodities for node %s", len(accessComms), node.GetName())
+
+	return accessComms, nil
 }

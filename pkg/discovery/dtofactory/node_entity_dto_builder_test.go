@@ -163,3 +163,108 @@ func TestGetNodeIPs(t *testing.T) {
 		}
 	}
 }
+
+func TestGetTaintCollection(t *testing.T) {
+	t1 := newTaint("k1", "v1", api.TaintEffectNoExecute)
+	t2 := newTaint("k2", "v2", api.TaintEffectNoSchedule)
+	t3 := newTaint("k3", "v3", api.TaintEffectPreferNoSchedule)
+	n1 := newNodeWithTaints([]api.Taint{t1})
+	n2 := newNodeWithTaints([]api.Taint{t2})
+	n3 := newNodeWithTaints([]api.Taint{t3})
+	nodes := []*api.Node{n1, n2, n3}
+
+	taintCollection := getTaintCollection(nodes)
+
+	fmt.Printf("taintCollection: %++v", taintCollection)
+
+	if len(taintCollection) != 2 {
+		t.Errorf("Expected 2 taints but got %d", len(taintCollection))
+	}
+
+	if value, ok := taintCollection[t1]; !ok {
+		t.Errorf("Taint %+v not found", t1)
+	} else if value != "k1=v1:NoExecute" {
+		t.Errorf("Taint %+v has wrong key %s", t1, value)
+	}
+
+	if value, ok := taintCollection[t2]; !ok {
+		t.Errorf("Taint %+v not found", t2)
+	} else if value != "k2=v2:NoSchedule" {
+		t.Errorf("Taint %+v has wrong key %s", t2, value)
+	}
+}
+
+func TestCreateTaintAccessComms(t *testing.T) {
+	t1 := newTaint("k1", "v1", api.TaintEffectNoExecute)
+	t2 := newTaint("k2", "v2", api.TaintEffectNoSchedule)
+	t3 := newTaint("k3", "v3", api.TaintEffectPreferNoSchedule)
+	n1 := newNodeWithTaints([]api.Taint{t1})
+	n2 := newNodeWithTaints([]api.Taint{t2})
+	n3 := newNodeWithTaints([]api.Taint{t3})
+	nodes := []*api.Node{n1, n2, n3}
+
+	taintCollection := getTaintCollection(nodes)
+
+	comms, err := createTaintAccessComms(n1, taintCollection)
+
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+
+	if len(comms) != 1 {
+		t.Errorf("Expected 1 commodity but got %d", len(comms))
+	}
+
+	if *(comms[0].Key) != "k2=v2:NoSchedule" {
+		t.Errorf("Comm %+v has wrong key %s", comms[0], *(comms[0].Key))
+	}
+
+	comms2, err := createTaintAccessComms(n2, taintCollection)
+
+	if len(comms2) != 1 {
+		t.Errorf("Expected 1 commodity but got %d", len(comms2))
+	}
+
+	if *(comms2[0].Key) != "k1=v1:NoExecute" {
+		t.Errorf("Comm %+v has wrong key %s", comms2[0], *(comms2[0].Key))
+	}
+
+	comms3, err := createTaintAccessComms(n3, taintCollection)
+
+	if len(comms3) != 2 {
+		t.Errorf("Expected 2 commodities but got %d", len(comms3))
+	}
+
+	if *(comms3[0].Key) != "k1=v1:NoExecute" || *(comms3[1].Key) != "k2=v2:NoSchedule" {
+		if *(comms3[1].Key) == "k1=v1:NoExecute" && *(comms3[0].Key) == "k2=v2:NoSchedule" {
+
+		} else {
+			t.Errorf("Wrong comms3 %+v", comms3)
+		}
+	}
+}
+
+func newNodeWithTaints(taints []api.Taint) *api.Node {
+	node := &api.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "my-node-1",
+			UID:  "my-node-1-UID",
+		},
+
+		Spec: api.NodeSpec{
+			Taints: taints,
+		},
+	}
+
+	return node
+}
+
+func newTaint(key, value string, effect api.TaintEffect) api.Taint {
+	taint := api.Taint{
+		Key:    key,
+		Value:  value,
+		Effect: effect,
+	}
+
+	return taint
+}

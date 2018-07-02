@@ -45,6 +45,7 @@ type podEntityDTOBuilder struct {
 	stitchingManager *stitching.StitchingManager
 	nodeNameUIDMap   map[string]string
 	quotaNameUIDMap  map[string]string
+	//taintCollection  map[api.Taint]string
 }
 
 func NewPodEntityDTOBuilder(sink *metrics.EntityMetricSink, stitchingManager *stitching.StitchingManager,
@@ -54,6 +55,7 @@ func NewPodEntityDTOBuilder(sink *metrics.EntityMetricSink, stitchingManager *st
 		nodeNameUIDMap:   nodeNameUIDMap,
 		quotaNameUIDMap:  quotaNameUIDMap,
 		stitchingManager: stitchingManager,
+		//taintCollection:  taintCollection,
 	}
 }
 
@@ -247,6 +249,13 @@ func (builder *podEntityDTOBuilder) getPodCommoditiesBought(pod *api.Pod, cpuFre
 		commoditiesBought = append(commoditiesBought, schedAccessComm)
 	}
 
+	//// Access commodity: toleration
+	//tolerateAccessComms, err := createTolerationAccessComms(pod, builder.taintCollection)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//commoditiesBought = append(commoditiesBought, tolerateAccessComms...)
+
 	// Cluster commodity.
 	clusterMetricUID := metrics.GenerateEntityStateMetricUID(metrics.ClusterType, "", metrics.Cluster)
 	clusterInfo, err := builder.metricsSink.GetMetric(clusterMetricUID)
@@ -342,3 +351,55 @@ func (builder *podEntityDTOBuilder) createContainerPodData(pod *api.Pod) *proto.
 	}
 	return nil
 }
+
+func createTolerationAccessComms(pod *api.Pod, taintCollection map[api.Taint]string) ([]*proto.CommodityDTO, error) {
+	accessComms := []*proto.CommodityDTO{}
+
+	for taint, key := range taintCollection {
+		// If the pod doesn't have the proper toleration, create access commodity to buy
+		if !TolerationsTolerateTaint(pod.Spec.Tolerations, &taint) {
+			accessComm, err := sdkbuilder.NewCommodityDTOBuilder(proto.CommodityDTO_VMPM_ACCESS).
+				Key(key).
+				Capacity(accessCommodityDefaultCapacity).
+				Create()
+
+			if err != nil {
+				return nil, err
+			}
+
+			glog.V(4).Infof("Created access commodity with key %s for pod %s", key, pod.GetName())
+
+			accessComms = append(accessComms, accessComm)
+		}
+	}
+
+	glog.V(4).Infof("Created %d access commodities for pod %s", len(accessComms), pod.GetName())
+
+	return accessComms, nil
+}
+
+// TolerationsTolerateTaint checks if taint is tolerated by any of the tolerations.
+func TolerationsTolerateTaint(tolerations []api.Toleration, taint *api.Taint) bool {
+	for i := range tolerations {
+		if tolerations[i].ToleratesTaint(taint) {
+			return true
+		}
+	}
+	return false
+}
+
+//// TolerationsTolerateTaints checks if given tolerations tolerates
+//// all the taints that apply to the filter in given taint list.
+//func TolerationsTolerateTaints(tolerations []v1.Toleration, taints []v1.Taint) bool {
+//	if len(taints) == 0 {
+//		return true
+//	}
+//
+//	for i := range taints {
+//		if !TolerationsTolerateTaint(tolerations, &taints[i]) {
+//			return false
+//		}
+//	}
+//
+//	return true
+//}
